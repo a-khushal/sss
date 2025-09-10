@@ -61,27 +61,6 @@ export function ImportedWalletDisplay({ walletData, onClear }: ImportedWalletDis
     setShowShares((prev) => prev.map((show, i) => (i === index ? !show : show)))
   }
 
-  const handleStoreToPinata = async () => {
-    if (!storagePassword) {
-      alert("Please enter a password for encryption")
-      return
-    }
-
-    setIsStoring(true)
-    setStorageError(null)
-
-    try {
-      const encryptedData = encryptWalletData(walletData, storagePassword)
-      const result = await storeToPinata(encryptedData)
-      setStorageResult(result)
-    } catch (error) {
-      console.error("Pinata storage failed:", error)
-      setStorageError(error.message)
-    } finally {
-      setIsStoring(false)
-    }
-  }
-
   const openInSolanaExplorer = (address: string) => {
     window.open(`https://explorer.solana.com/address/${address}?cluster=devnet`, "_blank")
   }
@@ -231,92 +210,6 @@ export function ImportedWalletDisplay({ walletData, onClear }: ImportedWalletDis
         </CardContent>
       </Card>
 
-      {/* IPFS Storage */}
-      <Card className="bg-black border-gray-900">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            IPFS Storage via Pinata
-          </CardTitle>
-          <CardDescription className="text-gray-300">
-            Store encrypted imported wallet data to IPFS using Pinata's reliable pinning service.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <Alert className="bg-red-950 border-red-800">
-            <Shield className="h-4 w-4" />
-            <AlertDescription className="text-red-200">
-              <strong>Security Notice:</strong> Data will be encrypted with your password before storage. Only store if
-              you understand the risks.
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-4">
-            <div>
-              <Label className="text-white">Encryption Password</Label>
-              <Input
-                type="password"
-                placeholder="Enter a strong password for encryption"
-                value={storagePassword}
-                onChange={(e) => setStoragePassword(e.target.value)}
-                className="bg-gray-900 border-gray-800 text-white mt-1"
-              />
-              <p className="text-sm text-gray-400 mt-1">
-                This password will encrypt your imported wallet data before storage. Keep it safe!
-              </p>
-            </div>
-
-            <div className="max-w-md mx-auto">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-purple-900 rounded-full flex items-center justify-center">
-                    <Upload className="h-6 w-6 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-white text-lg">Pinata IPFS</h4>
-                    <p className="text-sm text-gray-400">Reliable IPFS pinning service</p>
-                  </div>
-                </div>
-                <Button
-                  onClick={handleStoreToPinata}
-                  disabled={!storagePassword || isStoring}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
-                  size="lg"
-                >
-                  {isStoring ? "Storing to IPFS..." : "Store Imported Wallet to IPFS"}
-                </Button>
-                {storageResult && (
-                  <div className="bg-gray-900 border border-gray-800 rounded p-4">
-                    <p className="text-lg text-green-400 mb-3">✓ Successfully stored to IPFS!</p>
-                    <div className="space-y-2">
-                      <div>
-                        <p className="text-sm text-gray-400">IPFS Hash:</p>
-                        <p className="text-sm text-white font-mono break-all">{storageResult.hash}</p>
-                      </div>
-                      <a
-                        href={storageResult.gateway}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 text-sm"
-                      >
-                        View on Pinata Gateway <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </div>
-                )}
-                {storageError && (
-                  <div className="bg-red-950 border border-red-800 rounded p-4">
-                    <p className="text-lg text-red-400 mb-2">❌ Storage failed</p>
-                    <p className="text-sm text-red-300">{storageError}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Backup Instructions */}
       <Card className="bg-black border-gray-900">
         <CardHeader>
           <CardTitle className="text-white">Backup Instructions</CardTitle>

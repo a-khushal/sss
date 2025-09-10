@@ -39,11 +39,11 @@ export default function CreateWalletPage() {
     setShowShares(Array(shareConfig.totalShares).fill(false))
   }
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text:string) => {
     navigator.clipboard.writeText(text)
   }
 
-  const downloadShare = (share, index) => {
+  const downloadShare = (share: string, index: number) => {
     const blob = new Blob([share], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -439,8 +439,7 @@ export default function CreateWalletPage() {
                     {Array.from({ length: walletData.config.totalShares }, (_, i) => (
                       <div
                         key={i}
-                        className={`border-l-4 pl-4 ${
-                          i === 0
+                        className={`border-l-4 pl-4 ${i === 0
                             ? "border-blue-500"
                             : i === 1
                               ? "border-green-500"
@@ -451,7 +450,7 @@ export default function CreateWalletPage() {
                                   : i === 4
                                     ? "border-red-500"
                                     : "border-gray-500"
-                        }`}
+                          }`}
                       >
                         <h4 className="font-semibold text-white">
                           Share {i + 1}:{" "}

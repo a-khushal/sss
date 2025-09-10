@@ -6,44 +6,30 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, AlertTriangle } from "lucide-react"
+import { Upload, ShieldCheck } from "lucide-react"
 import { splitSecret } from "@/lib/crypto"
 import bs58 from "bs58"
 import { Keypair } from "@solana/web3.js"
+import { encryptShareWithGuardianPubkey, storeToPinata } from "@/lib/storage"
 
 interface WalletImportProps {
   onImportComplete?: (walletData: any) => void
 }
 
 export function WalletImport({ onImportComplete }: WalletImportProps) {
-  const { publicKey, signMessage } = useWallet()
+  const { publicKey } = useWallet()
+  const [step, setStep] = useState<"import" | "encrypt">("import")
   const [importing, setImporting] = useState(false)
   const [privateKey, setPrivateKey] = useState("")
-  const [shareConfig, setShareConfig] = useState({
-    totalShares: 5,
-    threshold: 3,
-  })
+  const [shareConfig, setShareConfig] = useState({ totalShares: 5, threshold: 3 })
+  const [shares, setShares] = useState<string[]>([])
+  const [guardianPubkeys, setGuardianPubkeys] = useState<string[]>(Array(5).fill(""))
+  const [walletInfo, setWalletInfo] = useState<{ base58PrivateKey: string; publicKey: string } | null>(null)
 
-  const handleImportFromConnectedWallet = async () => {
-    if (!publicKey || !signMessage) {
-      alert("Please connect a wallet first")
-      return
-    }
-
-    setImporting(true)
-    try {
-      // Note: We can't actually extract the private key from a connected wallet
-      // This is a security feature. We can only sign messages/transactions.
-      alert(
-        "Connected wallets don't expose private keys for security. Use 'Import from Private Key' instead or create a new wallet.",
-      )
-    } catch (error) {
-      console.error("Import failed:", error)
-      alert("Failed to import wallet")
-    } finally {
-      setImporting(false)
-    }
+  const updateGuardianKey = (index: number, value: string) => {
+    const updated = [...guardianPubkeys]
+    updated[index] = value
+    setGuardianPubkeys(updated)
   }
 
   const handleImportFromPrivateKey = () => {
@@ -56,19 +42,12 @@ export function WalletImport({ onImportComplete }: WalletImportProps) {
     try {
       let secretKey: Uint8Array | null = null
 
-      // --- Base58 try ---
       try {
         secretKey = bs58.decode(privateKey.trim())
       } catch {
-        secretKey = null
-      }
-
-      // --- Hex fallback ---
-      if (!secretKey) {
         const hex = privateKey.trim().replace(/^0x/, "")
         if (hex.length % 2 === 0) {
-          const bytes = new Uint8Array(hex.match(/.{2}/g)!.map((b) => Number.parseInt(b, 16)))
-          secretKey = bytes
+          secretKey = new Uint8Array(hex.match(/.{2}/g)!.map((b) => Number.parseInt(b, 16)))
         }
       }
 
@@ -76,31 +55,64 @@ export function WalletImport({ onImportComplete }: WalletImportProps) {
         throw new Error("Key must be 32 or 64 bytes (Base58 or Hex)")
       }
 
-      // Build Keypair
-      const keypair = secretKey.length === 64 ? Keypair.fromSecretKey(secretKey) : Keypair.fromSeed(secretKey)
+      const keypair =
+        secretKey.length === 64
+          ? Keypair.fromSecretKey(secretKey)
+          : Keypair.fromSeed(secretKey)
 
-      const base58PrivateKey = secretKey.length === 64 ? bs58.encode(secretKey) : bs58.encode(keypair.secretKey)
+      const base58PrivateKey =
+        secretKey.length === 64
+          ? bs58.encode(secretKey)
+          : bs58.encode(keypair.secretKey)
 
-      // Generate shares
-      const shares = splitSecret(base58PrivateKey, shareConfig.totalShares, shareConfig.threshold)
+      const split = splitSecret(base58PrivateKey, shareConfig.totalShares, shareConfig.threshold)
 
-      // Wallet data
-      const walletData = {
-        privateKey: base58PrivateKey,
+      setShares(split)
+      setGuardianPubkeys(Array(shareConfig.totalShares).fill(""))
+      setWalletInfo({
+        base58PrivateKey,
         publicKey: keypair.publicKey.toBase58(),
-        address: keypair.publicKey.toBase58(),
-        shares,
-        config: shareConfig,
-        imported: true,
-      }
-
-      onImportComplete?.(walletData)
-      alert("Wallet imported and shares created successfully!")
+      })
+      setStep("encrypt")
     } catch (error: any) {
-      console.error("Import failed:", error)
       alert(`Failed to import wallet: ${error.message}`)
     } finally {
       setImporting(false)
+    }
+  }
+
+  const handleEncryptionAndUpload = async () => {
+    if (guardianPubkeys.some((pk) => !pk.trim())) {
+      alert("Enter all guardian public keys")
+      return
+    }
+
+    try {
+      const encryptedAndStored = await Promise.all(
+        shares.map(async (share, idx) => {
+          const encrypted = encryptShareWithGuardianPubkey(share, guardianPubkeys[idx])
+          const { hash } = await storeToPinata(encrypted)
+          return hash
+        })
+      )
+
+      const result = {
+        shares: encryptedAndStored,
+        config: {
+          threshold: shareConfig.threshold,
+          totalShares: shareConfig.totalShares,
+        },
+        guardianPubkeys,
+        address: walletInfo?.publicKey,
+        publicKey: walletInfo?.publicKey,
+        privateKey: walletInfo?.base58PrivateKey,
+      }
+
+      onImportComplete?.(result)
+      alert("Shares encrypted and uploaded to IPFS")
+    } catch (e) {
+      console.error(e)
+      alert("Encryption or upload failed")
     }
   }
 
@@ -108,54 +120,31 @@ export function WalletImport({ onImportComplete }: WalletImportProps) {
     <Card className="bg-black border-gray-900">
       <CardHeader>
         <CardTitle className="text-white flex items-center gap-2">
-          <Upload className="h-5 w-5" />
-          Import Existing Wallet
+          {step === "import" ? <Upload className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+          {step === "import" ? "Import Wallet" : "Encrypt & Upload Shares"}
         </CardTitle>
         <CardDescription className="text-gray-300">
-          Import an existing Solana wallet to create threshold shares
+          {step === "import"
+            ? "Import an existing Solana wallet and generate secret shares"
+            : "Assign guardian public keys for encrypted upload"}
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-6">
-        <Alert className="bg-red-950 border-red-800">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="text-red-200">
-            <strong>Security Warning:</strong> Only import wallets in a secure environment. Your private key will be
-            processed locally to create shares.
-          </AlertDescription>
-        </Alert>
-
-        {/* Import from Connected Wallet */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-white">Option 1: From Connected Wallet</h3>
-          <p className="text-sm text-gray-400">
-            Note: Connected wallets don't expose private keys for security. This option is limited.
-          </p>
-          <Button
-            onClick={handleImportFromConnectedWallet}
-            disabled={!publicKey || importing}
-            variant="outline"
-            className="w-full bg-transparent"
-          >
-            {importing ? "Processing..." : "Import from Connected Wallet"}
-          </Button>
-        </div>
-
-        <div className="border-t border-gray-800 pt-6">
-          <h3 className="font-semibold text-white mb-4">Option 2: From Private Key</h3>
-
-          <div className="space-y-4">
+        {step === "import" ? (
+          <>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-white">Total Shares</Label>
                 <select
                   value={shareConfig.totalShares}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const newTotal = parseInt(e.target.value)
                     setShareConfig((prev) => ({
-                      ...prev,
-                      totalShares: Number.parseInt(e.target.value),
-                      threshold: Math.min(prev.threshold, Number.parseInt(e.target.value)),
+                      totalShares: newTotal,
+                      threshold: Math.min(prev.threshold, newTotal),
                     }))
-                  }
+                  }}
                   className="w-full bg-gray-900 border-gray-800 text-white rounded-md px-3 py-2"
                 >
                   {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -173,7 +162,7 @@ export function WalletImport({ onImportComplete }: WalletImportProps) {
                   onChange={(e) =>
                     setShareConfig((prev) => ({
                       ...prev,
-                      threshold: Number.parseInt(e.target.value),
+                      threshold: Math.min(parseInt(e.target.value), prev.totalShares),
                     }))
                   }
                   className="w-full bg-gray-900 border-gray-800 text-white rounded-md px-3 py-2"
@@ -191,14 +180,11 @@ export function WalletImport({ onImportComplete }: WalletImportProps) {
               <Label className="text-white">Private Key</Label>
               <Input
                 type="password"
-                placeholder="Enter your Solana private key (Base58 or Hex format)"
+                placeholder="Enter your Solana private key (Base58 or Hex)"
                 value={privateKey}
                 onChange={(e) => setPrivateKey(e.target.value)}
                 className="bg-gray-900 border-gray-800 text-white font-mono"
               />
-              <p className="text-xs text-gray-400">
-                Supports Base58 format (standard) or Hex format. Your key will be processed locally.
-              </p>
             </div>
 
             <Button
@@ -206,23 +192,49 @@ export function WalletImport({ onImportComplete }: WalletImportProps) {
               disabled={!privateKey.trim() || importing}
               className="w-full bg-purple-600 hover:bg-purple-700"
             >
-              {importing ? "Creating Shares..." : "Import & Create Shares"}
+              {importing ? "Processing..." : "Import Wallet & Generate Shares"}
             </Button>
-          </div>
-        </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <h4 className="font-semibold text-white mb-2">Supported Formats:</h4>
-          <ul className="space-y-1 text-sm text-gray-300">
-            <li>
-              • Base58 32-byte seed (e.g. <code className="font-mono">3wJS…KD7S</code>)
-            </li>
-            <li>• Base58 64-byte secret-key (standard Solana export)</li>
-            <li>
-              • Hex 32 / 64-byte (with or without <code>0x</code> prefix)
-            </li>
-          </ul>
-        </div>
+            {shares.length > 0 && (
+              <div className="space-y-2 mt-4">
+                <Label className="text-white">Generated Shares</Label>
+                {shares.map((share, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-gray-800 text-white p-2 rounded-md font-mono text-sm break-all"
+                  >
+                    Share {idx + 1}: {share}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label className="text-white">Guardian Public Keys</Label>
+              <div className="space-y-2">
+                {shares.map((_, i) => (
+                  <Input
+                    key={i}
+                    type="text"
+                    placeholder={`Guardian #${i + 1} public key`}
+                    value={guardianPubkeys[i] || ""}
+                    onChange={(e) => updateGuardianKey(i, e.target.value)}
+                    className="bg-gray-900 border-gray-800 text-white font-mono"
+                  />
+                ))}
+              </div>
+            </div>
+
+            <Button
+              onClick={handleEncryptionAndUpload}
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
+              Encrypt & Upload Shares
+            </Button>
+          </>
+        )}
       </CardContent>
     </Card>
   )

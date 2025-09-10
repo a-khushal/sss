@@ -1,5 +1,7 @@
-// Decentralized storage utilities
+import nacl from "tweetnacl"
+import bs58 from "bs58"
 
+// Existing encryption for whole wallet data (simplified XOR - keep as is)
 export function encryptWalletData(walletData: any, password: string): string {
   // Simplified encryption for demo - in production use proper encryption like AES-256
   const dataToEncrypt = {
@@ -38,6 +40,55 @@ export function decryptWalletData(encryptedData: string, password: string): any 
   } catch (error) {
     throw new Error("Failed to decrypt data - incorrect password or corrupted data")
   }
+}
+
+// New: Encrypt a single share with guardian's public key using tweetnacl box
+// Returns Base58 encoded string of nonce + encrypted message
+export function encryptShareWithGuardianPubkey(share: string, guardianPubkeyBase58: string): string {
+  // Convert guardian public key from base58 to Uint8Array
+  const guardianPubkey = bs58.decode(guardianPubkeyBase58)
+
+  // Generate ephemeral keypair for sender (one-time)
+  const ephemeralKeypair = nacl.box.keyPair()
+
+  // Convert share string to Uint8Array
+  const shareBytes = new TextEncoder().encode(share)
+
+  // Generate nonce (24 bytes random)
+  const nonce = nacl.randomBytes(nacl.box.nonceLength)
+
+  // Encrypt the share with guardian's public key and ephemeral secret key
+  const encrypted = nacl.box(shareBytes, nonce, guardianPubkey, ephemeralKeypair.secretKey)
+
+  // Compose payload = ephemeral public key (32 bytes) + nonce (24 bytes) + encrypted message
+  const payload = new Uint8Array(
+    ephemeralKeypair.publicKey.length + nonce.length + encrypted.length
+  )
+  payload.set(ephemeralKeypair.publicKey, 0)
+  payload.set(nonce, ephemeralKeypair.publicKey.length)
+  payload.set(encrypted, ephemeralKeypair.publicKey.length + nonce.length)
+
+  // Return base58 string of the payload
+  return bs58.encode(payload)
+}
+
+// Optional: Decrypt share with own secret key and ephemeral public key included in payload
+// Assumes payload is base58 string containing [ephemeralPubKey (32) | nonce (24) | encryptedData]
+// `recipientSecretKey` is Uint8Array of 32 bytes (your private key)
+export function decryptShareWithSecretKey(payloadBase58: string, recipientSecretKey: Uint8Array): string {
+  const payload = bs58.decode(payloadBase58)
+
+  const ephemeralPubKey = payload.slice(0, 32)
+  const nonce = payload.slice(32, 32 + 24)
+  const encrypted = payload.slice(32 + 24)
+
+  const decrypted = nacl.box.open(encrypted, nonce, ephemeralPubKey, recipientSecretKey)
+
+  if (!decrypted) {
+    throw new Error("Failed to decrypt share - invalid key or corrupted data")
+  }
+
+  return new TextDecoder().decode(decrypted)
 }
 
 export async function storeToPinata(
