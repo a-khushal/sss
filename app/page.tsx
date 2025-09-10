@@ -56,12 +56,10 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Wallet Connection Section */}
         <div className="max-w-2xl mx-auto mb-8">
           <WalletConnection />
         </div>
 
-        {/* Show imported wallet display or import form */}
         <div className="max-w-2xl mx-auto mb-16">
           {importedWallet ? (
             <ImportedWalletDisplay walletData={importedWallet} onClear={handleClearImport} />

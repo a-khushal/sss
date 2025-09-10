@@ -1,5 +1,6 @@
 import { Keypair } from "@solana/web3.js"
 import bs58 from "bs58"
+// @ts-ignore
 import * as sss from "shamirs-secret-sharing"
 
 export function generateSolanaWallet() {
@@ -42,7 +43,7 @@ export function splitSecret(secretBase58: string, totalShares: number, threshold
   const secretBytes = bs58.decode(secretBase58)
   const shares = sss.split(secretBytes, { shares: totalShares, threshold })
 
-  return shares.map((buf, index) => `${index + 1}-${bs58.encode(buf)}`)
+  return shares.map((buf: Buffer, index: number) => `${index + 1}-${bs58.encode(buf)}`)
 }
 
 export function reconstructSecret(shares: string[]): string {
@@ -61,7 +62,6 @@ export function reconstructSecret(shares: string[]): string {
   return bs58.encode(secretBytes)
 }
 
-// Alias for compatibility
 export function generateWallet() {
   return generateSolanaWallet()
 }

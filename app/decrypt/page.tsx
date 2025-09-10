@@ -11,16 +11,29 @@ import { Copy, Download, Eye, EyeOff, AlertTriangle, Globe, ExternalLink, Lock, 
 import { retrieveFromPinata, decryptWalletData } from "@/lib/storage"
 import Link from "next/link"
 
+interface ShareConfig {
+  totalShares: number;
+  threshold: number;
+}
+
+interface DecryptedWallet {
+  address: string;
+  publicKey: string;
+  timestamp: number | string;
+  shares?: string[];
+  config?: ShareConfig;
+}
+
 export default function DecryptWalletPage() {
   const [step, setStep] = useState(1)
   const [ipfsHash, setIpfsHash] = useState("")
   const [decryptionPassword, setDecryptionPassword] = useState("")
   const [encryptedData, setEncryptedData] = useState("")
-  const [decryptedWallet, setDecryptedWallet] = useState(null)
+  const [decryptedWallet, setDecryptedWallet] = useState<DecryptedWallet | null>(null)
   const [isRetrieving, setIsRetrieving] = useState(false)
   const [isDecrypting, setIsDecrypting] = useState(false)
   const [error, setError] = useState("")
-  const [showShares, setShowShares] = useState([])
+  const [showShares, setShowShares] = useState<boolean[]>([])
 
   const handleRetrieveFromIPFS = async () => {
     if (!ipfsHash.trim()) {
@@ -32,7 +45,6 @@ export default function DecryptWalletPage() {
     setError("")
 
     try {
-      // Clean the hash (remove any gateway URLs)
       const cleanHash = ipfsHash.trim().replace(/^https?:\/\/[^/]+\/ipfs\//, "")
 
       const data = await retrieveFromPinata(cleanHash)
@@ -66,11 +78,11 @@ export default function DecryptWalletPage() {
     }
   }
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
 
-  const downloadShare = (share, index) => {
+  const downloadShare = (share: string, index: number) => {
     const blob = new Blob([share], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -84,17 +96,17 @@ export default function DecryptWalletPage() {
 
   const downloadAllShares = () => {
     if (decryptedWallet?.shares) {
-      decryptedWallet.shares.forEach((share, index) => {
+      decryptedWallet.shares.forEach((share: string, index: number) => {
         setTimeout(() => downloadShare(share, index), index * 100)
       })
     }
   }
 
-  const toggleShareVisibility = (index) => {
+  const toggleShareVisibility = (index: number) => {
     setShowShares((prev) => prev.map((show, i) => (i === index ? !show : show)))
   }
 
-  const openInSolanaExplorer = (address) => {
+  const openInSolanaExplorer = (address: string) => {
     window.open(`https://explorer.solana.com/address/${address}?cluster=devnet`, "_blank")
   }
 

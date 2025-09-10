@@ -31,7 +31,6 @@ export default function RecoverWalletPage() {
     setShares(newShares)
     setError("")
 
-    // Try to detect configuration from shares
     detectConfigFromShares(newShares)
   }
 
@@ -59,7 +58,6 @@ export default function RecoverWalletPage() {
           threshold: requiredThreshold,
         })
 
-        // Auto-adjust required threshold if we have enough unique shares
         if (uniqueShares >= requiredThreshold) {
           // Configuration looks good
         }
@@ -72,14 +70,12 @@ export default function RecoverWalletPage() {
     setError("")
 
     try {
-      // Filter out empty shares and validate format
       const validShares = shares.filter((share) => share.trim() !== "")
 
       if (validShares.length < requiredThreshold) {
         throw new Error(`Please provide at least ${requiredThreshold} shares`)
       }
 
-      // Validate share format before attempting reconstruction
       const shareValidation = validShares.map((share, index) => {
         const parts = share.trim().split("-")
         if (parts.length !== 2) {
@@ -104,7 +100,6 @@ export default function RecoverWalletPage() {
         return { index: shareIndex, data: base58Data }
       })
 
-      // Check for duplicate share indices
       const indices = shareValidation.map((s) => s.index)
       const uniqueIndices = new Set(indices)
       if (indices.length !== uniqueIndices.size) {
@@ -113,7 +108,6 @@ export default function RecoverWalletPage() {
 
       console.log("Attempting to reconstruct secret from", validShares.length, "shares")
 
-      // ✅ Use the original validShares strings (e.g. "1-...") for reconstruction
       const privateKey = reconstructSecret(validShares)
       console.log("Secret reconstructed successfully")
 

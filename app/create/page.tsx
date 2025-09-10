@@ -12,19 +12,37 @@ import { generateSolanaWallet, splitSecret } from "@/lib/crypto"
 import { storeToPinata, encryptWalletData } from "@/lib/storage"
 import Link from "next/link"
 
+interface StorageResult {
+  hash: string;
+  gateway: string;
+}
+
+interface ShareConfig {
+  totalShares: number;
+  threshold: number;
+}
+
+interface WalletData {
+  address: string;
+  publicKey: string;
+  privateKey: string;
+  shares: string[];
+  config: ShareConfig;
+}
+
 export default function CreateWalletPage() {
   const [step, setStep] = useState(1)
-  const [walletData, setWalletData] = useState(null)
+  const [walletData, setWalletData] = useState<WalletData | null>(null)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [showShares, setShowShares] = useState(Array(10).fill(false))
-  const [shareConfig, setShareConfig] = useState({
+  const [shareConfig, setShareConfig] = useState<ShareConfig>({
     totalShares: 7,
     threshold: 5,
   })
   const [storagePassword, setStoragePassword] = useState("")
-  const [storageResult, setStorageResult] = useState(null)
+  const [storageResult, setStorageResult] = useState<StorageResult | null>(null)
   const [isStoring, setIsStoring] = useState(false)
-  const [storageError, setStorageError] = useState(null)
+  const [storageError, setStorageError] = useState<string | null>(null)
 
   const handleGenerateWallet = () => {
     const wallet = generateSolanaWallet()
@@ -55,7 +73,7 @@ export default function CreateWalletPage() {
     URL.revokeObjectURL(url)
   }
 
-  const toggleShareVisibility = (index) => {
+  const toggleShareVisibility = (index: number) => {
     setShowShares((prev) => prev.map((show, i) => (i === index ? !show : show)))
   }
 
@@ -74,13 +92,13 @@ export default function CreateWalletPage() {
       setStorageResult(result)
     } catch (error) {
       console.error("Pinata storage failed:", error)
-      setStorageError(error.message)
+      setStorageError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsStoring(false)
     }
   }
 
-  const openInSolanaExplorer = (address) => {
+  const openInSolanaExplorer = (address: string) => {
     window.open(`https://explorer.solana.com/address/${address}?cluster=devnet`, "_blank")
   }
 
@@ -276,7 +294,7 @@ export default function CreateWalletPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {walletData.shares.map((share, index) => (
+                  {walletData.shares.map((share: string, index: number) => (
                     <div key={index} className="border rounded-lg p-4 bg-gray-900 border-gray-800">
                       <div className="flex items-center justify-between mb-2">
                         <Label className="font-semibold text-white">Share {index + 1}</Label>
@@ -303,7 +321,6 @@ export default function CreateWalletPage() {
                 </CardContent>
               </Card>
 
-              {/* Pinata IPFS Storage */}
               <Card className="bg-black border-gray-900">
                 <CardHeader>
                   <CardTitle className="text-white flex items-center gap-2">
